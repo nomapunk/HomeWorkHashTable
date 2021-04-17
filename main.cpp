@@ -2,6 +2,7 @@
 #include <iostream>
 #include <list>
 #include <stdexcept>
+//v1
 template<class KeyType, class ValueType, class Hash = std::hash<KeyType>>
 class HashMap {
 public:
