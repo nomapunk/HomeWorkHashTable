@@ -2,7 +2,9 @@
 #include <iostream>
 #include <list>
 #include <stdexcept>
+
 template<class KeyType, class ValueType, class Hash = std::hash<KeyType>>
+
 class HashMap {
 public:
     struct Node;
@@ -10,13 +12,13 @@ public:
     struct iterator {
         std::list<int>::iterator it;
         std::vector<std::pair<Node, bool>>* arr;
-        iterator() {}
+        iterator() = default;
         iterator(std::list<int>::iterator _it, std::vector<std::pair<Node, bool>>& _arr): it(_it), arr(&_arr){}
         std::pair<const KeyType, ValueType>& operator* () {
-            return reinterpret_cast<std::pair<const KeyType, ValueType>&>((*arr)[*it].first.key_and_val);
+            return reinterpret_cast<std::pair<const KeyType, ValueType>&>((*arr)[*it].first.entry);
         }
         std::pair<const KeyType, ValueType>* operator-> () {
-            return reinterpret_cast<std::pair<const KeyType, ValueType>*>(&(((*arr)[*it].first.key_and_val)));
+            return reinterpret_cast<std::pair<const KeyType, ValueType>*>(&(((*arr)[*it].first.entry)));
         }
         iterator& operator++ () {
             it--;
@@ -41,10 +43,10 @@ public:
         const_iterator() {}
         const_iterator(iterator& _it): it(_it.it), arr(_it.arr){}
         const std::pair<const KeyType, ValueType>& operator* () const {
-            return reinterpret_cast<const std::pair<const KeyType, ValueType>&>((*arr)[*it].first.key_and_val);
+            return reinterpret_cast<const std::pair<const KeyType, ValueType>&>((*arr)[*it].first.entry);
         }
         const std::pair<const KeyType, ValueType>* operator-> () const {
-            return reinterpret_cast<const std::pair<const KeyType, ValueType>*>(&(((*arr)[*it].first.key_and_val)));
+            return reinterpret_cast<const std::pair<const KeyType, ValueType>*>(&(((*arr)[*it].first.entry)));
         }
         const_iterator& operator++ () {
             it--;
@@ -65,19 +67,19 @@ public:
 
     HashMap(Hash hasher = Hash()): get_hash(hasher) {
         buffer_size = default_size;
-        _size = 0;
+        factor = 0;
         size_all_non_nullptr = 0;
-        arr.resize(buffer_size);
-        _begin = _end = iterator(s.begin(), arr);
+        array.resize(buffer_size);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
     }
 
     HashMap(HashMap& a): get_hash(a.get_hash) {
         buffer_size = default_size;
-        _size = 0;
+        factor = 0;
         size_all_non_nullptr = 0;
-        arr.resize(buffer_size);
-        _begin = _end = iterator(s.begin(), arr);
+        array.resize(buffer_size);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
         for (auto it = a.begin(); it != a.end(); it++) {
             insert(*it);
@@ -92,10 +94,10 @@ public:
             begin++;
         }
         buffer_size = cur.size();
-        _size = 0;
+        factor = 0;
         size_all_non_nullptr = 0;
-        arr.resize(buffer_size);
-        begin = end = iterator(s.begin(), arr);
+        array.resize(buffer_size);
+        begin = end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
         for (auto& t : cur) {
             insert(t);
@@ -104,10 +106,10 @@ public:
 
     HashMap(std::initializer_list<std::pair<KeyType, ValueType>> cur, Hash hasher = Hash()): get_hash(hasher) {
         buffer_size = cur.size();
-        _size = 0;
+        factor = 0;
         size_all_non_nullptr = 0;
-        arr.resize(buffer_size);
-        _begin = _end = iterator(s.begin(), arr);
+        array.resize(buffer_size);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
         for (auto& t : cur) {
             insert(t);
@@ -115,11 +117,11 @@ public:
     }
 
     int size() const {
-        return _size;
+        return factor;
     }
 
     bool empty() const {
-        return _size == 0;
+        return factor == 0;
     }
 
     Hash hash_function() const {
@@ -142,28 +144,29 @@ public:
         return _cbegin;
     }
 
-    iterator find(const KeyType key) {
+    iterator find(const KeyType& key) {
         int ind = Find(key);
         if (ind != -1) {
-            return arr[ind].first.it;
+            return array[ind].first.it;
         }
         return _begin;
     }
+
     const_iterator find(const KeyType key) const {
         int ind = Find(key);
         if (ind != -1) {
-            return arr[ind].first.cit;
+            return array[ind].first.const_iterator;
         }
         return _cbegin;
     }
 
-    void insert(std::pair<KeyType, ValueType> val) {
+    void insert(const std::pair<KeyType, ValueType>& val) {
         if (Find(val.first) == -1) {
             Add(val.first, val.second);
         }
     }
 
-    void erase(KeyType key) {
+    void erase(const KeyType& key) {
         if (Find(key) != -1) {
             Remove(key);
         }
@@ -174,45 +177,45 @@ public:
         if (t == -1) {
             t = Add(key, ValueType());
         }
-        return arr[t].first.key_and_val.second;
+        return array[t].first.entry.second;
     }
     const ValueType& at(const KeyType& key) const {
         int t = Find(key);
         if (t == -1) {
             throw std::out_of_range("std::out_of_range");
         }
-        return arr[t].first.key_and_val.second;
+        return array[t].first.entry.second;
     }
     void clear() {
-        arr.clear();
+        array.clear();
         s.clear();
         buffer_size = default_size;
-        _size = 0;
+        factor = 0;
         size_all_non_nullptr = 0;
-        arr.resize(buffer_size);
-        _begin = _end = iterator(s.begin(), arr);
+        array.resize(buffer_size);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
     }
 
     struct Node {
-        std::pair<KeyType, ValueType> key_and_val;
+        std::pair<KeyType, ValueType> entry;
         iterator it;
-        const_iterator cit;
+        const_iterator const_iterator;
         bool flag;
-        Node() {}
+        Node() = default;
         Node(KeyType _key, ValueType _val, iterator _it):
-                key_and_val(std::make_pair(_key, _val)), it(_it), flag(true) {}
+                entry(std::pair<KeyType, ValueType>(_key, _val)), it(_it), flag(true) {}
     };
 
 private:
-    static const int default_size = 47;
+    constexpr static const int default_size = 47;
     constexpr static const double rehash_size = 0.75;
-    size_t _size;
+    size_t factor;
     size_t buffer_size;
     size_t size_all_non_nullptr;
     Hash get_hash;
 
-    std::vector<std::pair<Node, bool>> arr;
+    std::vector<std::pair<Node, bool>> array;
     std::list<int> s;
     iterator _begin, _end;
     const_iterator _cbegin, _cend;
@@ -221,39 +224,39 @@ private:
         int past_buffer_size = buffer_size;
         buffer_size *= 2;
         size_all_non_nullptr = 0;
-        _size = 0;
+        factor = 0;
         s.clear();
-        _begin = _end = iterator(s.begin(), arr);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
-        std::vector<std::pair<Node, bool>> arr2(buffer_size);
-        arr.swap(arr2);
+        std::vector<std::pair<Node, bool>> tmp(buffer_size);
+        array.swap(tmp);
         for (int i = 0; i < past_buffer_size; i++) {
-            if (arr2[i].second && arr2[i].first.flag) {
-                Add(arr2[i].first.key_and_val.first, arr2[i].first.key_and_val.second);
+            if (tmp[i].second && tmp[i].first.flag) {
+                Add(tmp[i].first.entry.first, tmp[i].first.entry.second);
             }
         }
     }
     void Rehash() {
         int past_buffer_size = buffer_size;
         size_all_non_nullptr = 0;
-        _size = 0;
+        factor = 0;
         std::vector<std::pair<Node, bool>> arr2(buffer_size);
         s.clear();
-        _begin = _end = iterator(s.begin(), arr);
+        _begin = _end = iterator(s.begin(), array);
         _cbegin = _cend = const_iterator(_begin);
-        arr.swap(arr2);
+        array.swap(arr2);
         for (int i = 0; i < past_buffer_size; i++) {
             if (arr2[i].second && arr2[i].first.flag) {
-                Add(arr2[i].first.key_and_val.first, arr2[i].first.key_and_val.second);
+                Add(arr2[i].first.entry.first, arr2[i].first.entry.second);
             }
         }
     }
     int Find(const KeyType& key) {
-        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && arr[i].second; cnt++) {
-            if (arr[i].second && arr[i].first.key_and_val.first == key && arr[i].first.flag == true) {
+        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && array[i].second; cnt++) {
+            if (array[i].second && array[i].first.entry.first == key && array[i].first.flag == true) {
                 return i;
             }
-            if (i + 1 == arr.size()) {
+            if (i + 1 == array.size()) {
                 i = 0;
             } else {
                 i++;
@@ -262,11 +265,11 @@ private:
         return -1;
     }
     int Find(const KeyType& key) const {
-        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && arr[i].second; cnt++) {
-            if (arr[i].second && arr[i].first.key_and_val.first == key && arr[i].first.flag == true) {
+        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && array[i].second; cnt++) {
+            if (array[i].second && array[i].first.entry.first == key && array[i].first.flag == true) {
                 return i;
             }
-            if (i + 1 == arr.size()) {
+            if (i + 1 == array.size()) {
                 i = 0;
             } else {
                 i++;
@@ -276,18 +279,18 @@ private:
     }
 
     bool Remove(const KeyType& key) {
-        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && arr[i].second; cnt++) {
-            if (arr[i].first.key_and_val.first == key && arr[i].first.flag == true) {
-                arr[i].first.flag = false;
-                if (arr[i].first.cit == _cend) {
+        for (size_t i = get_hash(key) % buffer_size, cnt = 0; cnt < buffer_size && array[i].second; cnt++) {
+            if (array[i].first.entry.first == key && array[i].first.flag == true) {
+                array[i].first.flag = false;
+                if (array[i].first.const_iterator == _cend) {
                     ++_end;
                     ++_cend;
                 }
-                s.erase(arr[i].first.it.it);
-                _size--;
-                return i;
+                s.erase(array[i].first.it.it);
+                factor--;
+                return true;
             }
-            if (i + 1 == arr.size()) {
+            if (i + 1 == array.size()) {
                 i = 0;
             } else {
                 i++;
@@ -296,43 +299,43 @@ private:
         return false;
     }
     int Add(KeyType key, ValueType val) {
-        if (_size + 1 > size_t(rehash_size * buffer_size)) {
+        if (factor + 1 > size_t(rehash_size * buffer_size)) {
             Resize();
-        } else if (size_all_non_nullptr > 2 * _size) {
+        } else if (size_all_non_nullptr > 2 * factor) {
             Rehash();
         }
-        bool fast_insert = false;
+        bool exists_element = false;
         size_t i;
-        for (i = get_hash(key) % buffer_size; arr[i].second;) {
-            if (arr[i].first.key_and_val.first == key) {
-                fast_insert = true;
-                if (arr[i].first.flag == true) {
-                    _size--;
+        for (i = get_hash(key) % buffer_size; array[i].second;) {
+            if (array[i].first.entry.first == key) {
+                exists_element = true;
+                if (array[i].first.flag == true) {
+                    factor--;
                 }
                 break;
             }
-            if (i + 1 == arr.size()) {
+            if (i + 1 == array.size()) {
                 i = 0;
             } else {
                 i++;
             }
         }
-        if (fast_insert) {
-            arr[i].first.key_and_val.second = val;
-            arr[i].first.flag = true;
-            arr[i].first.it = iterator(s.insert(s.end(), i), arr);
-            arr[i].first.cit = const_iterator(arr[i].first.it);
-            _end = arr[i].first.it;
-            _cend = arr[i].first.cit;
+        if (exists_element) {
+            array[i].first.entry.second = val;
+            array[i].first.flag = true;
+            array[i].first.it = iterator(s.insert(s.end(), i), array);
+            array[i].first.const_iterator = const_iterator(array[i].first.it);
+            _end = array[i].first.it;
+            _cend = array[i].first.const_iterator;
         } else {
             size_all_non_nullptr++;
-            arr[i].second = true;
-            arr[i].first = Node(key, val, iterator(s.insert(s.end(), i), arr));
-            arr[i].first.cit = const_iterator(arr[i].first.it);
-            _end = arr[i].first.it;
-            _cend = arr[i].first.cit;
+            array[i].second = true;
+            array[i].first = Node(key, val, iterator(s.insert(s.end(), i), array));
+            array[i].first.const_iterator = const_iterator(array[i].first.it);
+            _end = array[i].first.it;
+            _cend = array[i].first.const_iterator;
         }
-        _size++;
+        factor++;
         return i;
     }
 };
